@@ -68,3 +68,7 @@ STEP4: Reload the systemd daemon, Start Apache Tomcat service and Enable the ser
         sudo systemctl enable tomcat
         sudo systemctl start tomcat
         sudo systemctl status tomcat
+
+
+
+Follow the above steps to install tomcat on linux server

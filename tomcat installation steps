@@ -1,70 +1,95 @@
-10.0.8 version of Apache Tomcat installation step
+Apache Tomcat 11 manual installation steps (Ubuntu/Debian)
+
+NOTE: install-tomcat.sh in this repo does all of this automatically:
+	sudo bash install-tomcat.sh
+
+The steps below use 11.0.29. Check https://tomcat.apache.org/download-11.cgi
+for the current release and change the version number if needed.
+Tomcat 11 needs Java 17 or newer.
 
 
-sudo apt update -y 
-sudo apt install default-jdk -y
+STEP1: Install Java.
+	sudo apt update -y
+	sudo apt install default-jdk -y
+	java -version
 
-STEP1: Downloading 10.0.8 version of Apache Tomcat.
-	wget https://archive.apache.org/dist/tomcat/tomcat-10/v10.0.8/bin/apache-tomcat-10.0.8.tar.gz
-	
-	STEP1_a: Extract the downloaded archive.
-		     sudo tar xzvf apache-tomcat-10.0.8.tar.gz
-	STEP1_b: Create an installation directory /opt/tomcat/
-		     sudo mkdir /opt/tomcat/
-	STEP1_c: Move the extracted files to the installation directory.
-		     sudo mv apache-tomcat-10.0.8/* /opt/tomcat/
-	STEP1_d: Change ownership of the installation directory.
-		     sudo chown -R www-data:www-data /opt/tomcat/
-	STEP1_e: Change access permissions for the installation directory.
-		     sudo chmod -R 755 /opt/tomcat/
-    STEP1_f: Create a systemd unit file for Apache Tomcat to run it as a system.service. /etc/systemd/system/tomcat.service
-	        echo '[Unit]
-        Description=Tomcat
-        After=network.target
+	Note: if this shows a version below 17, run
+	      sudo apt install openjdk-17-jdk-headless -y
 
-        [Service]
-        Type=forking
-        User=root
-        Group=root
-        Environment="JAVA_HOME=/usr/lib/jvm/java-1.11.0-openjdk-amd64"
-        Environment="JAVA_OPTS=-Djava.security.egd=file:///dev/urandom"
-        Environment="CATALINA_BASE=/opt/tomcat"
-        Environment="CATALINA_HOME=/opt/tomcat"
-        Environment="CATALINA_PID=/opt/tomcat/temp/tomcat.pid"
-        Environment="CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC"
-        ExecStart=/opt/tomcat/bin/startup.sh
-        ExecStop=/opt/tomcat/bin/shutdown.sh
+STEP2: Download and install Apache Tomcat.
+	STEP2_a: Download the archive.
+		     wget https://archive.apache.org/dist/tomcat/tomcat-11/v11.0.29/bin/apache-tomcat-11.0.29.tar.gz
+	STEP2_b: Create a dedicated user and the installation directory /opt/tomcat/
+		     sudo useradd --system --home-dir /opt/tomcat --shell /usr/sbin/nologin tomcat
+		     sudo mkdir -p /opt/tomcat
+	STEP2_c: Extract the archive into the installation directory.
+		     sudo tar xzf apache-tomcat-11.0.29.tar.gz -C /opt/tomcat --strip-components=1
 
-       [Install]
-       WantedBy=multi-user.target	
-      
+STEP3: Configure administrator and manager user accounts.
+	sudo vi /opt/tomcat/conf/tomcat-users.xml
 
-STEP2: Configure administrator and manager user account for Apache Tomcat.
-	     echo ' Edit the tomcat-users.xml file and add below users config lines
-		 sudo vi /opt/tomcat/conf/tomcat-users.xml
-	
-		  <role rolename="manager-gui" />
-		  <user username="manager" password="StrongPassword" roles="manager-gui,manager-script" />
+	Add these lines just above the closing </tomcat-users> line.
+	Replace ChangeThisPassword with your own password.
 
-		  <role rolename="admin-gui" />
-		  <user username="admin" password="StrongPassword" roles="manager-gui,admin-gui" />
+		<role rolename="manager-gui" />
+		<role rolename="manager-script" />
+		<role rolename="admin-gui" />
+		<user username="manager" password="ChangeThisPassword" roles="manager-gui,manager-script" />
+		<user username="admin" password="ChangeThisPassword" roles="manager-gui,admin-gui" />
 
-STEP3: Enable remote access to Apache Tomcat by editing manager and host-manager configuration files.
-	
-		1. sudo vi /opt/tomcat/webapps/manager/META-INF/context.xml
-		 	Note: Comment out the IP addresses section as shown below.
+STEP4: Enable remote access to the Manager and Host Manager apps.
+	Edit both files:
+		sudo vi /opt/tomcat/webapps/manager/META-INF/context.xml
+		sudo vi /opt/tomcat/webapps/host-manager/META-INF/context.xml
+
+	In each, comment out the RemoteAddrValve section as shown below.
 
 		<!-- <Valve className="org.apache.catalina.valves.RemoteAddrValve"
-         allow="127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1" /> -->
+		       allow="127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1" /> -->
 
-        2. sudo vi /opt/tomcat/webapps/host-manager/META-INF/context.xml
-        	Note: sudo vi /opt/tomcat/webapps/host-manager/META-INF/context.xml
+STEP5: Set ownership and permissions of the installation directory.
+	sudo chown -R tomcat:tomcat /opt/tomcat
+	sudo chmod -R u+rwX,g+rX,o-rwx /opt/tomcat
 
-        <!--<Valve className="org.apache.catalina.valves.RemoteAddrValve"
-         allow="127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1" /> -->	
+STEP6: Create a systemd unit file so Tomcat runs as a service.
+	Find your Java home first:
+		dirname $(dirname $(readlink -f $(which java)))
 
-STEP4: Reload the systemd daemon, Start Apache Tomcat service and Enable the service to start up on system boot.
-        sudo systemctl daemon-reload
-        sudo systemctl enable tomcat
-        sudo systemctl start tomcat
-        sudo systemctl status tomcat
+	sudo vi /etc/systemd/system/tomcat.service
+
+	Paste the following, replacing the JAVA_HOME value with the path printed above.
+
+[Unit]
+Description=Apache Tomcat
+After=network.target
+
+[Service]
+Type=forking
+User=tomcat
+Group=tomcat
+Environment="JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64"
+Environment="JAVA_OPTS=-Djava.security.egd=file:///dev/urandom"
+Environment="CATALINA_BASE=/opt/tomcat"
+Environment="CATALINA_HOME=/opt/tomcat"
+Environment="CATALINA_PID=/opt/tomcat/temp/tomcat.pid"
+Environment="CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC"
+PIDFile=/opt/tomcat/temp/tomcat.pid
+ExecStart=/opt/tomcat/bin/startup.sh
+ExecStop=/opt/tomcat/bin/shutdown.sh
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+STEP7: Reload systemd, enable the service on boot and start it.
+	sudo systemctl daemon-reload
+	sudo systemctl enable tomcat
+	sudo systemctl start tomcat
+	sudo systemctl status tomcat
+
+STEP8: Open it in the browser.
+	Allow inbound TCP 8080 in the instance's security group, then browse to:
+		http://<instance-public-ip>:8080/
+		http://<instance-public-ip>:8080/manager/html
